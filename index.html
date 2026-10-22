@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Brad's Toolbox</title>
+<meta name="description" content="Free tools that run in your browser. No sign-up, no ads, nothing to install.">
+<meta property="og:title" content="Brad's Toolbox">
+<meta property="og:description" content="Free tools that run in your browser. No sign-up, no ads, nothing to install.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <header class="band">
+    <div class="wrap">
+      <p class="eyebrow">bradploeger.github.io</p>
+      <h1>Brad's Toolbox</h1>
+      <p class="lede">Free tools that run entirely in your browser. No sign-up, no ads, nothing to install. Your work stays on your device.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h2 class="section">Tools</h2>
+    <ul class="tools">
+      <!-- To add a tool: copy this <li>, point it at /tools/<name>/ and swap the preview. -->
+      <li>
+        <a class="tool" href="/tools/grapher/">
+          <svg class="preview" viewBox="0 0 320 160" aria-hidden="true">
+            <defs>
+              <pattern id="g" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="var(--grid)" stroke-width="1"/></pattern>
+            </defs>
+            <rect width="320" height="160" fill="url(#g)"/>
+            <path d="M0 80H320M160 0V160" stroke="var(--axis)" stroke-width="1.5"/>
+            <path d="M0 80 C 20 30, 50 30, 70 80 S 120 130, 140 80 S 190 30, 210 80 S 260 130, 280 80 S 310 40, 320 50" fill="none" stroke="var(--c1)" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M40 0 Q 160 260 280 0" fill="none" stroke="var(--c2)" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="105" cy="104" r="5" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.75"/><circle cx="105" cy="104" r="2.2" fill="var(--ink)"/>
+            <circle cx="215" cy="104" r="5" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.75"/><circle cx="215" cy="104" r="2.2" fill="var(--ink)"/>
+          </svg>
+          <div class="body">
+            <h3>Plotline Grapher</h3>
+            <p>A graphing calculator for functions, equations like <code>x² + y² = 9</code>, and elliptic curves over finite fields.</p>
+            <ul class="tags"><li>Sliders</li><li>Roots &amp; intersections</li><li>Table of values</li><li>Mod p</li></ul>
+          </div>
+        </a>
+      </li>
+    </ul>
+    <p class="more">More tools on the way.</p>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Made by Brad Ploeger. Source on <a href="https://github.com/bradploeger/bradploeger.github.io">GitHub</a>.</p>
+  </footer>
+</body>
+</html>

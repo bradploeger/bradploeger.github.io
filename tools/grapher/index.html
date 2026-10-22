@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Free online graphing calculator: plot functions, implicit equations like elliptic curves, and modular equations, with sliders, roots, intersections and a table of values.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<title>Plotline Grapher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+<style>
+/* Layout: scrolling ledger (functions, sliders, table) on the left, engineering-paper plot filling the rest; stacks plot-over-ledger on phones. */
+:root {
+  --paper: #f3f6f4;
+  --panel: #ffffff;
+  --ink: #18242b;
+  --muted: #5d6e74;
+  --rule: #d5e1dc;
+  --grid-minor: #e3ece8;
+  --grid-major: #c4d6cf;
+  --axis: #3b4e55;
+  --accent: #0f6b74;
+  --accent-soft: #dcefee;
+  --error: #b3261e;
+  --c1: #0f6b74; --c2: #c2410c; --c3: #6d28d9; --c4: #15803d; --c5: #be185d; --c6: #a16207;
+  --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-math: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0f1719; --panel: #152024; --ink: #e2ece9; --muted: #8fa3a6; --rule: #24353a;
+  --grid-minor: #18262a; --grid-major: #233a40; --axis: #9fb7b8; --accent: #4fc3c9; --accent-soft: #173a3d; --error: #f2847b;
+  --c1: #4fc3c9; --c2: #fb923c; --c3: #a78bfa; --c4: #4ade80; --c5: #f472b6; --c6: #facc15;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0f1719; --panel: #152024; --ink: #e2ece9; --muted: #8fa3a6; --rule: #24353a;
+  --grid-minor: #18262a; --grid-major: #233a40; --axis: #9fb7b8; --accent: #4fc3c9; --accent-soft: #173a3d; --error: #f2847b;
+  --c1: #4fc3c9; --c2: #fb923c; --c3: #a78bfa; --c4: #4ade80; --c5: #f472b6; --c6: #facc15;
+  color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-ui); }
+* { box-sizing: border-box; }
+.app { height: 100%; display: grid; grid-template-columns: minmax(290px, 350px) 1fr; }
+.ledger { background: var(--panel); border-right: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow-y: auto; }
+.pad { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: 14px; }
+.ledger header { padding-block: 18px 12px; border-bottom: 1px solid var(--rule); }
+.home { display: inline-block; margin-bottom: 8px; font-size: 12.5px; color: var(--accent); text-decoration: none; }
+.home:hover { text-decoration: underline; }
+h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.sub { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+.label { margin: 0; padding-block: 14px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+ul { list-style: none; margin: 0; padding: 0; }
+
+.row { display: grid; grid-template-columns: 28px 1fr 28px; gap: 8px; align-items: start; padding-block: 8px; border-bottom: 1px solid var(--rule); }
+.rows .row:first-child { border-top: 1px solid var(--rule); }
+.swatch { width: 22px; height: 22px; margin-top: 5px; border-radius: 50%; border: 2px solid var(--c); background: var(--c); cursor: pointer; padding: 0; }
+.swatch[aria-pressed="false"] { background: transparent; }
+.field { min-width: 0; display: flex; align-items: center; gap: 6px; font-family: var(--font-math); font-size: 15px; }
+.lhs { color: var(--muted); white-space: nowrap; }
+.field input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: transparent; border: 0; border-bottom: 1px dashed transparent; padding: 6px 2px; }
+.field input:focus { outline: none; border-bottom-color: var(--accent); }
+.err { grid-column: 2; font-size: 12px; color: var(--error); margin-top: -2px; }
+.info { grid-column: 2; font-size: 12px; color: var(--muted); margin-top: -2px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.info b { color: var(--ink); font-weight: 600; }
+.fit { font: 500 12px var(--font-ui); color: var(--accent); background: transparent; border: 0; padding: 0; margin-left: 6px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.del { width: 28px; height: 28px; margin-top: 2px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; }
+.del:hover { background: var(--grid-minor); color: var(--ink); }
+.add { margin-block: 10px 4px; margin-left: max(16px, env(safe-area-inset-left, 0px)); align-self: flex-start; font: 500 14px var(--font-ui); color: var(--accent); background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.add:hover { border-color: var(--accent); }
+
+.param { display: grid; gap: 4px; padding-block: 8px 10px; border-top: 1px solid var(--rule); }
+.ptop { display: flex; align-items: center; gap: 6px; font-family: var(--font-math); font-size: 15px; }
+.ptop .pval { width: 7.5em; font: inherit; font-variant-numeric: tabular-nums; color: var(--ink); background: transparent; border: 0; border-bottom: 1px dashed var(--rule); padding: 3px 2px; }
+.ptop .pval:focus { outline: none; border-bottom-color: var(--accent); }
+.play { margin-left: auto; width: 30px; height: 30px; border: 1px solid var(--rule); border-radius: 50%; background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; }
+.play[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.prange { display: grid; grid-template-columns: 3.6em 1fr 3.6em; gap: 8px; align-items: center; }
+.prange input[type="number"] { width: 100%; font: 12px var(--font-math); color: var(--muted); background: transparent; border: 0; border-bottom: 1px dashed transparent; padding: 2px 0; text-align: center; }
+.prange input[type="number"]:focus { outline: none; color: var(--ink); border-bottom-color: var(--accent); }
+input[type="range"] { width: 100%; min-width: 0; accent-color: var(--accent); }
+
+.tablectl { display: flex; gap: 14px; flex-wrap: wrap; padding-bottom: 8px; font-size: 12.5px; color: var(--muted); }
+.tablectl label { display: flex; align-items: center; gap: 6px; }
+.tablectl input { width: 5.5em; font: 13px var(--font-math); color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 5px; padding: 4px 6px; }
+.tablewrap { overflow-x: auto; margin-left: max(16px, env(safe-area-inset-left, 0px)); margin-right: 14px; border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font: 12.5px var(--font-math); font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; color: var(--muted); background: var(--paper); position: sticky; top: 0; }
+th:first-child, td:first-child { text-align: left; border-right: 1px solid var(--rule); }
+tbody tr { cursor: pointer; }
+tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
+tbody tr:last-child td { border-bottom: 0; }
+td.na { color: var(--muted); }
+
+.hint { margin-top: auto; padding-block: 14px 16px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--muted); line-height: 1.55; }
+.hint p { margin: 0 0 6px; }
+.hint code { font-family: var(--font-math); font-size: 11.5px; color: var(--ink); }
+.ex { font: 11.5px var(--font-math); color: var(--accent); background: transparent; border: 1px solid var(--rule); border-radius: 5px; padding: 2px 6px; margin: 2px 0; cursor: pointer; }
+.ex:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+.stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+canvas.dragging { cursor: grabbing; }
+.chips { position: absolute; top: 12px; left: max(12px, env(safe-area-inset-left, 0px)); right: 64px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+.chip { pointer-events: auto; font: 500 13px var(--font-ui); color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 999px; padding: 7px 12px 7px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.chip::before { content: ""; width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid var(--muted); box-sizing: border-box; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.chip[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent-soft); }
+.tools { position: absolute; top: 12px; right: max(12px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.tools button { width: 38px; height: 38px; border: 0; background: transparent; color: var(--ink); font: 500 18px var(--font-ui); cursor: pointer; }
+.tools button + button { border-top: 1px solid var(--rule); }
+.tools button:hover { background: var(--grid-minor); }
+button:focus-visible, .add:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.readout { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 12px; font-family: var(--font-math); font-size: 12.5px; font-variant-numeric: tabular-nums; line-height: 1.6; pointer-events: none; max-width: calc(100% - 24px); }
+.readout .k { color: var(--muted); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.legend { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); bottom: 12px; display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.legend .r { background: var(--muted); border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--muted); width: 8px; height: 8px; }
+.legend .x { background: var(--panel); border: 1.5px solid var(--ink); box-shadow: inset 0 0 0 2px var(--panel), inset 0 0 0 5px var(--ink); }
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: minmax(320px, 56%) 1fr; }
+  .stage { grid-row: 1; }
+  .ledger { grid-row: 2; border-right: 0; border-top: 1px solid var(--rule); }
+  .ledger header, .hint, .legend { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<style>html { box-sizing: border-box; } html, body { margin: 0; } body { font-size: 14px; -webkit-text-size-adjust: 100%; } :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); } [hidden] { display: none !important; }</style>
+</head>
+<body>
+<div class="app">
+  <aside class="ledger" id="ledger">
+    <header class="pad">
+      <a class="home" href="/">← Brad's Toolbox</a>
+      <h1>Plotline Grapher</h1>
+      <p class="sub">Type a function of x or an equation in x and y. Any other letter becomes a slider.</p>
+    </header>
+
+    <p class="label pad">Functions</p>
+    <ul class="rows" id="rows"></ul>
+    <button class="add" id="add" type="button">+ Add function</button>
+
+    <section id="paramSec" hidden>
+      <p class="label pad">Sliders</p>
+      <ul id="params"></ul>
+    </section>
+
+    <section id="tableSec" hidden>
+      <p class="label pad">Table of values</p>
+      <div class="tablectl pad">
+        <label for="tStart">Start x <input id="tStart" type="number" step="any" value="-3"></label>
+        <label for="tStep">Step <input id="tStep" type="number" step="any" value="0.5"></label>
+      </div>
+      <div class="tablewrap"><table id="table"></table></div>
+    </section>
+
+    <div class="hint pad">
+      <p>Click to add: <button class="ex" type="button">a sin(bx)</button> <button class="ex" type="button">x^3 - kx</button> <button class="ex" type="button">y^2 = x^3 + ax + b</button> <button class="ex" type="button">y^2 = x^3 + 2x + 3 (mod 97)</button> <button class="ex" type="button">x^2 + y^2 = 9</button> <button class="ex" type="button">y = mod(x, 3)</button></p>
+      <p>Write <code>y = …</code> for a function, or any equation in x and y for a curve. End an equation with <code>(mod p)</code> to plot its whole-number solutions mod p. <code>log</code> is base 10 and <code>ln</code> is natural.</p>
+      <p>Drag to pan, scroll or pinch to zoom. Hover the plot or a marker to read values. Click a table row to trace that x.</p>
+    </div>
+  </aside>
+
+  <main class="stage" id="stage">
+    <canvas id="plot" aria-label="Function plot"></canvas>
+    <div class="chips" role="group" aria-label="Show on graph">
+      <button class="chip" id="optRoots" type="button" aria-pressed="false">Roots</button>
+      <button class="chip" id="optInter" type="button" aria-pressed="true">Intersections</button>
+      <button class="chip" id="optTable" type="button" aria-pressed="false">Table</button>
+    </div>
+    <div class="tools">
+      <button id="zin" type="button" aria-label="Zoom in">+</button>
+      <button id="zout" type="button" aria-label="Zoom out">−</button>
+      <button id="home" type="button" aria-label="Reset view" title="Reset view">⌂</button>
+    </div>
+    <div class="readout" id="readout" hidden></div>
+    <div class="legend" id="legend" hidden></div>
+  </main>
+</div>
+
+<script>
+(() => {
+  /* ---------- math setup ---------- */
+  const natLog = math.log, log10 = math.log10;
+  math.import({
+    ln: x => natLog(x),
+    log: (x, b) => b === undefined ? log10(x) : natLog(x, b)
+  }, { override: true });
+  const { SymbolNode, OperatorNode, FunctionNode } = math;
+  const FUNCS = ["sinh","cosh","tanh","asin","acos","atan","sqrt","sin","cos","tan","sec","csc","cot","abs","exp","log","ln"];
+  const CONSTS = ["pi","tau","phi"];
+  const isKnown = n => Object.prototype.hasOwnProperty.call(math, n);
+  const isFnName = (path, parent) => parent && parent.isFunctionNode && path === "fn";
+
+  function product(factors) {
+    return factors.map(f => typeof f === "string" ? new SymbolNode(f) : f)
+      .reduce((a, b) => a ? new OperatorNode("*", "multiply", [a, b], true) : b, null);
+  }
+  // "bx" -> b*x, "sinx" -> sin(x), "2pix" -> 2*pi*x
+  function splitName(name) {
+    const out = [];
+    let i = 0;
+    while (i < name.length) {
+      const f = FUNCS.find(k => name.startsWith(k, i) && name.length > i + k.length);
+      if (f) { out.push(new FunctionNode(new SymbolNode(f), [splitName(name.slice(i + f.length))])); break; }
+      const c = CONSTS.find(k => name.startsWith(k, i));
+      if (c) { out.push(c); i += c.length; continue; }
+      out.push(name[i]); i++;
+    }
+    return product(out);
+  }
+
+  // "y = ..." or a bare expression -> explicit y = f(x); any other equation -> implicit F(x, y) = 0
+  function prep(expr) {
+    const node = math.parse(expr).transform((n, path, parent) => {
+      if (n.isSymbolNode && !isFnName(path, parent) && n.name !== "x" && n.name !== "y" && !isKnown(n.name) && n.name.length > 1 && /^[A-Za-z]+$/.test(n.name))
+        return splitName(n.name);
+      return n;
+    });
+    const syms = new Set();
+    let usesX = false, usesY = false;
+    node.traverse((n, path, parent) => {
+      if (!n.isSymbolNode || isFnName(path, parent)) return;
+      if (n.name === "y") usesY = true;
+      else if (n.name === "x") usesX = true;
+      else if (!isKnown(n.name)) syms.add(n.name);
+    });
+    return { node, syms, usesX, usesY };
+  }
+
+  // Kinds: explicit "y = f(x)", implicit "F(x,y) = G(x,y)", modular "L ≡ R (mod p)" over whole numbers 0..p-1
+  function parseSrc(src) {
+    let s = src.trim().replace(/\*\*/g, "^").replace(/π/g, "pi").replace(/≡/g, "=");
+    const empty = { kind: "explicit", code: null, syms: [], parseErr: "" };
+    if (!s) return empty;
+    let modExpr = null, m = s.match(/^(.*)\(\s*mod\s+(.+?)\s*\)\s*$/i);
+    if (m && m[1].includes("=")) { s = m[1].trim(); modExpr = m[2]; }
+    else if ((m = s.match(/^(.*?)\s+mod\s+([A-Za-z0-9_.^]+|\([^()]*\))\s*$/i)) && m[1].includes("=") && !/^\s*(y|f\s*\(\s*x\s*\))\s*=/i.test(m[1])) { s = m[1].trim(); modExpr = m[2]; }
+    const parts = s.split(/(?<![<>=!])=(?!=)/);
+    if (parts.length > 2) return { ...empty, parseErr: "Use a single = sign." };
+    try {
+      if (modExpr !== null) {
+        if (parts.length !== 2) return { ...empty, parseErr: "Write the congruence with = or ≡, for example y^2 = x^3 + 7 (mod 17)." };
+        const [l, r] = parts.map(t => t.trim());
+        if (!l || !r) return empty;
+        const L = prep(l), R = prep(r), P = prep(modExpr), D = prep(`(${l}) - (${r})`);
+        const syms = [...new Set([...L.syms, ...R.syms, ...P.syms])].sort();
+        if (P.usesX || P.usesY) return { ...empty, syms, parseErr: "The modulus can't depend on x or y." };
+        let ySide = null, xSide = null;
+        if (!L.usesX && !R.usesY) { ySide = L; xSide = R; } else if (!L.usesY && !R.usesX) { ySide = R; xSide = L; }
+        return { kind: "modular", code: D.node.compile(), syms, parseErr: "", pC: P.node.compile(), lhsC: L.node.compile(), rhsC: R.node.compile(),
+          ySideC: ySide && ySide.node.compile(), xSideC: xSide && xSide.node.compile(), isEC: l.replace(/\s/g, "") === "y^2" };
+      }
+      let kind = "explicit", expr = s;
+      if (parts.length === 2) {
+        const [l, r] = parts.map(t => t.trim());
+        if (!l || !r) return empty; // still typing
+        if (/^(y|f\s*\(\s*x\s*\))$/i.test(l)) expr = r;
+        else { kind = "implicit"; expr = `(${l}) - (${r})`; }
+      }
+      const E = prep(expr), syms = [...E.syms].sort();
+      if (kind === "explicit" && E.usesY) return { ...empty, syms, parseErr: "To use y, write an equation such as y^2 = x^3 + ax + b." };
+      return { kind, code: E.node.compile(), syms, parseErr: "" };
+    } catch (e) {
+      return { ...empty, parseErr: "Check the syntax: " + String(e.message || e).replace(/\(char \d+\)/, "").trim() };
+    }
+  }
+
+  /* ---------- modular solving ---------- */
+  function modSolve(f) {
+    const key = f.src + "|" + [...params.values()].map(p => p.v).join(",");
+    if (f.modKey === key) return f.mod;
+    const res = { pts: [], byX: new Map(), p: 0, err: "", note: "" };
+    f.modKey = key; f.mod = res;
+    let p;
+    try { p = Math.round(toNum(f.pC.evaluate(scope))); } catch { p = NaN; }
+    if (!Number.isInteger(p) || p < 2) { res.err = "The modulus must be a whole number of at least 2."; return res; }
+    res.p = p;
+    let prime = p > 1;
+    for (let d = 2; d * d <= p; d++) if (p % d === 0) { prime = false; break; }
+    if (f.isEC && !prime) res.note = `${p} isn't prime, so these are solutions mod ${p} rather than a curve over a field. `;
+    let big = false, frac = false;
+    const ev = (c, x, y) => {
+      scope.x = x; scope.y = y;
+      let v; try { v = toNum(c.evaluate(scope)); } catch { return null; }
+      if (!isFinite(v)) return null;
+      if (Math.abs(v) > 9e15) { big = true; return null; }
+      if (!Number.isInteger(v)) { frac = true; return null; }
+      return ((v % p) + p) % p;
+    };
+    const add = (x, y) => { res.pts.push(x, y); let a = res.byX.get(x); if (!a) res.byX.set(x, a = []); a.push(y); };
+    const CAP = 400000;
+    if (f.ySideC) {
+      if (p > 20000) { res.err = "The modulus is limited to 20,000."; return res; }
+      const byRes = new Map();
+      for (let y = 0; y < p; y++) { const r = ev(f.ySideC, 0, y); if (r === null) continue; let a = byRes.get(r); if (!a) byRes.set(r, a = []); a.push(y); }
+      for (let x = 0; x < p && res.pts.length < CAP; x++) { const r = ev(f.xSideC, x, 0); if (r === null) continue; const ys = byRes.get(r); if (ys) for (const y of ys) add(x, y); }
+    } else {
+      if (p > 500) { res.err = "When x and y share a side, the modulus is limited to 500."; return res; }
+      for (let x = 0; x < p; x++) for (let y = 0; y < p && res.pts.length < CAP; y++) {
+        const a = ev(f.lhsC, x, y), b = ev(f.rhsC, x, y);
+        if (a !== null && b !== null && a === b) add(x, y);
+      }
+    }
+    if (big) res.note += "Some values were too large for exact whole-number math and were skipped. Try a smaller modulus. ";
+    if (frac) res.note += "Some values weren't whole numbers and were skipped; division isn't treated as a modular inverse.";
+    return res;
+  }
+
+  /* ---------- state ---------- */
+  const KEY = "plotline-grapher-v2";
+  const COLORS = ["--c1","--c2","--c3","--c4","--c5","--c6"];
+  const scope = {};
+  const fns = [];
+  const params = new Map(); // name -> {v,min,max,playing,dir}
+  const opts = { roots: false, inter: true, table: false };
+  const view = { cx: 0, cy: 0, scale: 50 };
+  let nextId = 1, W = 0, H = 0, hover = null, selRow = null, viewSet = false;
+
+  const rowsEl = document.getElementById("rows");
+  const paramsEl = document.getElementById("params");
+  const canvas = document.getElementById("plot");
+  const ctx = canvas.getContext("2d");
+  const readout = document.getElementById("readout");
+  const legend = document.getElementById("legend");
+  const tStart = document.getElementById("tStart"), tStep = document.getElementById("tStep");
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  function fmt(v) {
+    if (!isFinite(v)) return "undefined";
+    if (Math.abs(v) < 1e-10) return "0";
+    const a = Math.abs(v);
+    if (a >= 1e6 || a < 1e-4) return v.toExponential(3).replace("e+", "e");
+    return String(parseFloat(v.toPrecision(6)));
+  }
+
+  function evalRaw(f, x, y = 0.5) { scope.x = x; scope.y = y; return f.code.evaluate(scope); }
+  function toNum(v) {
+    if (typeof v === "number") return v;
+    if (v && typeof v.re === "number") return Math.abs(v.im) < 1e-12 ? v.re : NaN;
+    if (typeof v === "boolean") return v ? 1 : 0;
+    return NaN;
+  }
+  function makeEval(f) {
+    f.F = (x, y) => { try { return toNum(evalRaw(f, x, y)); } catch { return NaN; } };
+    return x => { try { return toNum(evalRaw(f, x)); } catch { return NaN; } };
+  }
+
+  function validate(f) {
+    f.ok = false;
+    if (!f.code) { f.err = f.parseErr; return; }
+    try {
+      const v = evalRaw(f, 0.5, 0.5);
+      if (!(typeof v === "number" || typeof v === "boolean" || (v && typeof v.re === "number"))) { f.err = "This needs to give a number for each x."; return; }
+      f.err = ""; f.ok = true;
+    } catch (e) {
+      const m = String(e.message || e);
+      const u = m.match(/Undefined function (\w+)/);
+      f.err = u ? `Unknown function ${u[1]}. Check the spelling.` : m;
+    }
+  }
+
+  /* ---------- function rows ---------- */
+  function addRow(src = "", on = true, focus = false) {
+    const f = { id: nextId++, src, on, color: COLORS[fns.length % COLORS.length] };
+    // pick first unused color
+    const used = new Set(fns.map(g => g.color));
+    f.color = COLORS.find(c => !used.has(c)) || f.color;
+    Object.assign(f, parseSrc(src));
+    f.eval = makeEval(f);
+    fns.push(f);
+    const li = document.createElement("li");
+    li.className = "row pad";
+    li.style.setProperty("--c", `var(${f.color})`);
+    li.innerHTML = `
+      <button class="swatch" type="button" aria-pressed="${on}" aria-label="Show or hide this graph"></button>
+      <label class="field"><span class="lhs">y =</span><input id="fx-${f.id}" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Function ${f.id}"></label>
+      <button class="del" type="button" aria-label="Remove function">×</button>
+      <div class="err" hidden></div>
+      <div class="info" hidden></div>`;
+    const input = li.querySelector("input"), sw = li.querySelector(".swatch"), lhs = li.querySelector(".lhs");
+    f.errEl = li.querySelector(".err");
+    f.infoEl = li.querySelector(".info");
+    f.infoEl.addEventListener("click", e => { if (e.target.closest(".fit") && f.mod && f.mod.p) fitTo(f.mod.p); });
+    input.value = src;
+    lhs.hidden = src.includes("=");
+    input.addEventListener("input", () => { f.src = input.value; lhs.hidden = f.src.includes("="); Object.assign(f, parseSrc(input.value)); update(); });
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addRow("", true, true); } });
+    sw.addEventListener("click", () => { f.on = !f.on; sw.setAttribute("aria-pressed", f.on); update(); });
+    li.querySelector(".del").addEventListener("click", () => { fns.splice(fns.indexOf(f), 1); li.remove(); update(); });
+    rowsEl.appendChild(li);
+    if (focus) input.focus();
+    update();
+  }
+
+  /* ---------- sliders ---------- */
+  let paramKey = "";
+  function syncParams() {
+    const used = [...new Set(fns.flatMap(f => f.syms))].sort();
+    for (const n of used) if (!params.has(n)) params.set(n, { v: 1, min: -5, max: 5, playing: false, dir: 1 });
+    for (const [n, p] of params) if (!used.includes(n)) p.playing = false;
+    for (const n of used) scope[n] = params.get(n).v;
+    const key = used.join(",");
+    if (key === paramKey) return;
+    paramKey = key;
+    document.getElementById("paramSec").hidden = !used.length;
+    paramsEl.innerHTML = "";
+    for (const n of used) paramsEl.appendChild(paramRow(n, params.get(n)));
+    animate();
+  }
+
+  function paramRow(n, p) {
+    const li = document.createElement("li");
+    li.className = "param pad";
+    li.innerHTML = `
+      <div class="ptop"><label class="lhs" for="pv-${n}">${n} =</label><input class="pval" id="pv-${n}" type="number" step="any">
+        <button class="play" type="button" aria-pressed="${p.playing}" aria-label="Animate ${n}">▶</button></div>
+      <div class="prange">
+        <input id="pmin-${n}" type="number" step="any" aria-label="${n} minimum">
+        <input id="ps-${n}" type="range" step="any" aria-label="${n} slider">
+        <input id="pmax-${n}" type="number" step="any" aria-label="${n} maximum">
+      </div>`;
+    const val = li.querySelector(".pval"), rng = li.querySelector('[type="range"]'), mn = li.querySelector(`#pmin-${n}`), mx = li.querySelector(`#pmax-${n}`), play = li.querySelector(".play");
+    p.ui = () => { val.value = +p.v.toFixed(4); rng.min = p.min; rng.max = p.max; rng.value = p.v; mn.value = p.min; mx.value = p.max; play.setAttribute("aria-pressed", p.playing); play.textContent = p.playing ? "❚❚" : "▶"; };
+    const set = v => { p.v = v; scope[n] = v; p.ui(); draw(); save(); };
+    rng.addEventListener("input", () => { const v = +rng.value; p.v = v; scope[n] = v; val.value = +v.toFixed(4); interact(); draw(); save(); });
+    val.addEventListener("change", () => { const v = parseFloat(val.value); if (!isFinite(v)) return p.ui(); if (v < p.min) p.min = Math.floor(v); if (v > p.max) p.max = Math.ceil(v); set(v); });
+    mn.addEventListener("change", () => { const v = parseFloat(mn.value); if (isFinite(v) && v < p.max) { p.min = v; if (p.v < v) p.v = v; } set(p.v); });
+    mx.addEventListener("change", () => { const v = parseFloat(mx.value); if (isFinite(v) && v > p.min) { p.max = v; if (p.v > v) p.v = v; } set(p.v); });
+    play.addEventListener("click", () => { p.playing = !p.playing; p.ui(); animate(); });
+    p.ui();
+    return li;
+  }
+
+  let animating = false, lastT = 0;
+  function animate() {
+    if (animating) return;
+    if (![...params.values()].some(p => p.playing)) return;
+    animating = true; lastT = performance.now();
+    requestAnimationFrame(function tick(t) {
+      const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
+      let any = false;
+      for (const [n, p] of params) {
+        if (!p.playing || !(n in scope)) continue;
+        any = true;
+        p.v += p.dir * (p.max - p.min) / 4 * dt;
+        if (p.v >= p.max) { p.v = p.max; p.dir = -1; }
+        if (p.v <= p.min) { p.v = p.min; p.dir = 1; }
+        scope[n] = p.v; p.ui && p.ui();
+      }
+      if (any) interact();
+      draw();
+      if (any) requestAnimationFrame(tick); else { animating = false; save(); }
+    });
+  }
+
+  /* ---------- options ---------- */
+  function bindChip(id, key) {
+    const b = document.getElementById(id);
+    b.addEventListener("click", () => {
+      opts[key] = !opts[key];
+      b.setAttribute("aria-pressed", opts[key]);
+      if (key === "table") { document.getElementById("tableSec").hidden = !opts.table; if (opts.table) document.getElementById("tableSec").scrollIntoView({ block: "nearest" }); }
+      update();
+    });
+    b.setAttribute("aria-pressed", opts[key]);
+  }
+
+  /* ---------- table ---------- */
+  let tableKey = "";
+  function renderTable() {
+    if (!opts.table) return;
+    const vis = fns.filter(f => f.on && f.ok);
+    const start = parseFloat(tStart.value), step = parseFloat(tStep.value);
+    const hasImp = vis.some(f => f.kind === "implicit");
+    const yTop = toWorld(0, 0)[1], yBot = toWorld(0, H)[1];
+    const key = [vis.map(f => f.id + f.src).join("|"), [...params.values()].map(p => p.v).join(","), start, step, selRow, hasImp ? [yTop, yBot] : ""].join("#");
+    if (key === tableKey) return;
+    tableKey = key;
+    const table = document.getElementById("table");
+    if (!vis.length) { table.innerHTML = `<tbody><tr><td class="na">Add a function to see its values.</td></tr></tbody>`; return; }
+    if (!isFinite(start) || !isFinite(step) || step === 0) { table.innerHTML = `<tbody><tr><td class="na">Enter a start value and a non-zero step.</td></tr></tbody>`; return; }
+    let h = `<thead><tr><th>x</th>${vis.map((f, i) => `<th><span class="dot" style="background:var(${f.color})"></span>y${vis.length > 1 ? "<sub>" + (fns.indexOf(f) + 1) + "</sub>" : ""}</th>`).join("")}</tr></thead><tbody>`;
+    for (let i = 0; i < 17; i++) {
+      const x = +(start + i * step).toPrecision(12);
+      h += `<tr data-x="${x}"${selRow === x ? ' class="sel"' : ""}><td>${fmt(x)}</td>${vis.map(f => {
+        if (f.kind === "modular") {
+          const r = modSolve(f);
+          if (!r.p || !Number.isInteger(x) || x < 0 || x >= r.p) return `<td class="na">—</td>`;
+          const ys = r.byX.get(x) || [];
+          return `<td${ys.length ? "" : ' class="na"'}>${ys.length ? ys.slice(0, 4).join(", ") + (ys.length > 4 ? ", …" : "") : "none"}</td>`;
+        }
+        if (f.kind === "implicit") {
+          const ys = ysAt(f, x, yBot, yTop);
+          return `<td${ys.length ? "" : ' class="na"'}>${ys.length ? ys.slice(0, 3).map(fmt).join(", ") + (ys.length > 3 ? ", …" : "") : "none"}</td>`;
+        }
+        const y = f.eval(x); return `<td${isFinite(y) ? "" : ' class="na"'}>${fmt(y)}</td>`;
+      }).join("")}</tr>`;
+    }
+    table.innerHTML = h + "</tbody>" + (hasImp ? `<caption style="caption-side:bottom;padding:6px 10px;text-align:left;font:11.5px var(--font-ui);color:var(--muted)">Equation columns list every y in the visible range.</caption>` : "");
+  }
+  document.getElementById("table").addEventListener("click", e => {
+    const tr = e.target.closest("tr[data-x]"); if (!tr) return;
+    const x = +tr.dataset.x;
+    selRow = x;
+    const px = toPx(x, 0)[0];
+    if (px < 20 || px > W - 20) view.cx = x;
+    const f = fns.find(g => g.on && g.ok);
+    const y = !f ? NaN : f.kind === "modular" ? ((modSolve(f).byX.get(x) || [])[0] ?? NaN)
+      : f.kind === "implicit" ? (ysAt(f, x, toWorld(0, H)[1], toWorld(0, 0)[1])[0] ?? NaN) : f.eval(x);
+    if (isFinite(y)) { const py = toPx(x, y)[1]; if (py < 20 || py > H - 20) view.cy = y; }
+    hover = { x: toPx(x, 0)[0], y: isFinite(y) ? toPx(x, y)[1] : H / 2 };
+    tableKey = ""; draw();
+  });
+  tStart.addEventListener("input", () => { renderTable(); save(); });
+  tStep.addEventListener("input", () => { renderTable(); save(); });
+
+  /* ---------- update / persistence ---------- */
+  function setInfo(f) {
+    let html = "";
+    if (f.kind === "modular" && f.ok && f.on) {
+      const r = modSolve(f);
+      if (r.err) html = `<span style="color:var(--error)">${r.err}</span>`;
+      else {
+        const n = r.pts.length / 2;
+        html = `<b>${n.toLocaleString()}</b> solution${n === 1 ? "" : "s"} mod ${r.p.toLocaleString()}` +
+          (f.isEC ? ` · <b>${(n + 1).toLocaleString()}</b> curve points with ∞` : "") +
+          `<button class="fit" type="button">Zoom to fit</button>` + (r.note ? `<br>${r.note}` : "");
+      }
+    }
+    if (f.infoHtml !== html) { f.infoHtml = html; f.infoEl.innerHTML = html; f.infoEl.hidden = !html; }
+  }
+  function fitTo(p) {
+    view.cx = (p - 1) / 2; view.cy = (p - 1) / 2;
+    view.scale = Math.max(1e-4, Math.min(W, H) / (p * 1.15 + 2));
+    hover = null; interact(); draw();
+  }
+
+  function update() {
+    syncParams();
+    for (const f of fns) {
+      validate(f); f.errEl.textContent = f.err; f.errEl.hidden = !f.err;
+      if (f.kind === "modular" && f.ok) {
+        if (!f.autoFit) { const r = modSolve(f); if (r.p) { f.autoFit = true; if (W) fitTo(r.p); } }
+      } else f.autoFit = false;
+    }
+    tableKey = "";
+    draw(); save();
+  }
+  let saveT = 0;
+  function save() {
+    clearTimeout(saveT);
+    saveT = setTimeout(() => {
+      try {
+        const ps = {}; for (const [n, p] of params) ps[n] = { v: p.v, min: p.min, max: p.max };
+        localStorage.setItem(KEY, JSON.stringify({ fns: fns.map(f => ({ src: f.src, on: f.on })), params: ps, opts, table: [tStart.value, tStep.value] }));
+      } catch {}
+    }, 300);
+  }
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; }
+  }
+
+  /* ---------- coordinates ---------- */
+  const toPx = (x, y) => [W / 2 + (x - view.cx) * view.scale, H / 2 - (y - view.cy) * view.scale];
+  const toWorld = (px, py) => [view.cx + (px - W / 2) / view.scale, view.cy - (py - H / 2) / view.scale];
+  function niceStep(t) { const p = Math.pow(10, Math.floor(Math.log10(t))), n = t / p; return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p; }
+  function tick(v, step) {
+    if (Math.abs(v) < step / 1e6) return "0";
+    const a = Math.abs(v);
+    if (a >= 1e5 || a < 1e-4) return v.toExponential(1).replace("e+", "e");
+    return v.toFixed(Math.max(0, -Math.floor(Math.log10(step))));
+  }
+
+  /* ---------- zero finding ---------- */
+  function zeros(g, xa, xb, n) {
+    const out = [], dx = (xb - xa) / n;
+    const push = r => { if (!out.length || Math.abs(r - out[out.length - 1]) > dx * 0.75) out.push(r); };
+    let x0 = xa, y0 = g(xa), x1 = xa + dx, y1 = g(x1);
+    if (y0 === 0) push(x0);
+    for (let i = 2; i <= n + 1; i++) {
+      const x2 = xa + i * dx, y2 = g(x2);
+      if (y1 === 0) push(x1);
+      else if (isFinite(y0) && isFinite(y1) && y0 !== 0 && (y0 < 0) !== (y1 < 0)) {
+        let a = x0, b = x1, fa = y0;
+        for (let k = 0; k < 64; k++) { const m = (a + b) / 2, fm = g(m); if (!isFinite(fm)) break; if ((fm < 0) === (fa < 0)) { a = m; fa = fm; } else b = m; }
+        const r = (a + b) / 2, fr = g(r);
+        if (isFinite(fr) && Math.abs(fr) < 1e-6 * (1 + Math.max(Math.abs(y0), Math.abs(y1)))) push(r);
+      } else if (isFinite(y0) && isFinite(y1) && isFinite(y2) && (y0 < 0) === (y1 < 0) && (y1 < 0) === (y2 < 0)
+                 && Math.abs(y1) < Math.abs(y0) && Math.abs(y1) < Math.abs(y2)) {
+        // touching zero: minimize |g| on [x0, x2]
+        let a = x0, b = x2;
+        for (let k = 0; k < 80; k++) { const m1 = a + (b - a) / 3, m2 = b - (b - a) / 3; if (Math.abs(g(m1)) < Math.abs(g(m2))) b = m2; else a = m1; }
+        const r = (a + b) / 2;
+        if (Math.abs(g(r)) < 1e-9) push(r);
+      }
+      x0 = x1; y0 = y1; x1 = x2; y1 = y2;
+      if (out.length > 300) break;
+    }
+    return out;
+  }
+
+  /* ---------- implicit curves ---------- */
+  function ysAt(f, x, ya, yb) { return zeros(y => f.F(x, y), ya, yb, Math.max(60, Math.ceil(H / 3))); }
+
+  // coarser grid while panning, zooming or sliding; full detail once things settle
+  let coarseUntil = 0, settleT = 0;
+  function interact() { coarseUntil = performance.now() + 160; clearTimeout(settleT); settleT = setTimeout(draw, 190); }
+
+  // marching squares over a pixel grid; returns flat [x1,y1,x2,y2,...] in canvas px
+  function implicitSegs(f, cell) {
+    const key = [f.src, view.cx, view.cy, view.scale, W, H, cell, [...params.values()].map(p => p.v).join(",")].join("|");
+    if (f.segKey === key) return f.segs;
+    const nx = Math.ceil(W / cell) + 2, ny = Math.ceil(H / cell) + 2, v = new Float64Array(nx * ny);
+    for (let j = 0; j < ny; j++) {
+      const wy = view.cy - (j * cell - H / 2) / view.scale;
+      for (let i = 0; i < nx; i++) v[j * nx + i] = f.F(view.cx + (i * cell - W / 2) / view.scale, wy);
+    }
+    const segs = [];
+    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const a = v[j * nx + i], b = v[j * nx + i + 1], c = v[(j + 1) * nx + i + 1], d = v[(j + 1) * nx + i];
+      if (!(isFinite(a) && isFinite(b) && isFinite(c) && isFinite(d))) continue;
+      const sa = a > 0, sb = b > 0, sc = c > 0, sd = d > 0;
+      if (sa === sb && sb === sc && sc === sd) continue;
+      const x0 = i * cell, y0 = j * cell, pts = {};
+      if (sa !== sb) pts.t = [x0 + cell * a / (a - b), y0];
+      if (sb !== sc) pts.r = [x0 + cell, y0 + cell * b / (b - c)];
+      if (sd !== sc) pts.b = [x0 + cell * d / (d - c), y0 + cell];
+      if (sa !== sd) pts.l = [x0, y0 + cell * a / (a - d)];
+      const k = Object.keys(pts);
+      const add = (p, q) => segs.push(p[0], p[1], q[0], q[1]);
+      if (k.length === 2) add(pts[k[0]], pts[k[1]]);
+      else if (k.length === 4) {
+        if (((a + b + c + d) > 0) === sa) { add(pts.t, pts.r); add(pts.b, pts.l); }
+        else { add(pts.t, pts.l); add(pts.b, pts.r); }
+      }
+    }
+    f.segKey = key; f.segs = segs;
+    return segs;
+  }
+
+  /* ---------- rendering ---------- */
+  function resize() {
+    const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!viewSet && W) {
+      view.scale = Math.max(20, Math.min(W, H) / 14); viewSet = true;
+      const mf = fns.find(f => f.on && f.ok && f.kind === "modular" && f.mod && f.mod.p);
+      if (mf) fitTo(mf.mod.p);
+    }
+    draw();
+  }
+  let pending = false;
+  function draw() { if (!pending) { pending = true; requestAnimationFrame(render); } }
+
+  function render() {
+    pending = false;
+    renderTable();
+    if (!W) return;
+    const col = { paper: css("--paper"), panel: css("--panel"), rule: css("--rule"), minor: css("--grid-minor"), major: css("--grid-major"), axis: css("--axis"), muted: css("--muted"), ink: css("--ink") };
+    const mathFont = css("--font-math");
+    ctx.fillStyle = col.paper; ctx.fillRect(0, 0, W, H);
+    const [x0, y1] = toWorld(0, 0), [x1, y0] = toWorld(W, H);
+    const major = niceStep(90 / view.scale), minor = major / 5;
+
+    const lines = (step, color) => {
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
+      for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step) { const px = Math.round(toPx(x, 0)[0]) + .5; ctx.moveTo(px, 0); ctx.lineTo(px, H); }
+      for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step) { const py = Math.round(toPx(0, y)[1]) + .5; ctx.moveTo(0, py); ctx.lineTo(W, py); }
+      ctx.stroke();
+    };
+    if (minor * view.scale > 6) lines(minor, col.minor);
+    lines(major, col.major);
+
+    const [ax, ay] = toPx(0, 0);
+    ctx.strokeStyle = col.axis; ctx.lineWidth = 1.5; ctx.beginPath();
+    if (ax >= 0 && ax <= W) { ctx.moveTo(ax, 0); ctx.lineTo(ax, H); }
+    if (ay >= 0 && ay <= H) { ctx.moveTo(0, ay); ctx.lineTo(W, ay); }
+    ctx.stroke();
+
+    ctx.font = `11px ${mathFont}`; ctx.fillStyle = col.muted;
+    const ly = Math.min(Math.max(ay + 4, 4), H - 16), lx = Math.min(Math.max(ax - 6, 30), W - 6);
+    ctx.textBaseline = "top"; ctx.textAlign = "center";
+    for (let x = Math.ceil(x0 / major) * major; x <= x1; x += major) {
+      if (Math.abs(x) < major / 2) continue;
+      const px = toPx(x, 0)[0]; if (px < 14 || px > W - 50) continue;
+      ctx.fillText(tick(x, major), px, ly);
+    }
+    ctx.textBaseline = "middle"; ctx.textAlign = "right";
+    for (let y = Math.ceil(y0 / major) * major; y <= y1; y += major) {
+      if (Math.abs(y) < major / 2) continue;
+      const py = toPx(0, y)[1]; if (py < 60 || py > H - 10) continue;
+      ctx.fillText(tick(y, major), lx, py);
+    }
+    if (ax >= 0 && ax <= W && ay >= 0 && ay <= H) { ctx.textBaseline = "top"; ctx.fillText("0", ax - 5, ay + 4); }
+
+    const all = fns.filter(f => f.on && f.ok);
+    const vis = all.filter(f => f.kind === "explicit"), imp = all.filter(f => f.kind === "implicit"), mods = all.filter(f => f.kind === "modular");
+    for (const f of fns) setInfo(f);
+
+    // modular equations: whole-number solution points inside the 0..p-1 box
+    const cands = [];
+    for (const f of mods) {
+      const r = modSolve(f);
+      if (!r.p) continue;
+      const c = css(f.color);
+      const [bx0, by0] = toPx(-0.5, r.p - 0.5), [bx1, by1] = toPx(r.p - 0.5, -0.5);
+      ctx.save(); ctx.strokeStyle = c; ctx.globalAlpha = .45; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+      ctx.strokeRect(Math.round(bx0) + .5, Math.round(by0) + .5, Math.round(bx1 - bx0), Math.round(by1 - by0)); ctx.restore();
+      const rad = Math.max(1.4, Math.min(4.5, view.scale * 0.32)), pts = r.pts, fast = pts.length > 12000;
+      ctx.fillStyle = c; ctx.beginPath();
+      for (let i = 0; i < pts.length; i += 2) {
+        const px = W / 2 + (pts[i] - view.cx) * view.scale, py = H / 2 - (pts[i + 1] - view.cy) * view.scale;
+        if (px < -6 || px > W + 6 || py < -6 || py > H + 6) continue;
+        if (fast) ctx.rect(px - rad, py - rad, rad * 2, rad * 2);
+        else { ctx.moveTo(px + rad, py); ctx.arc(px, py, rad, 0, 7); }
+        if (hover && Math.abs(px - hover.x) < 14 && Math.abs(py - hover.y) < 14) cands.push({ px, py, x: pts[i], y: pts[i + 1], label: "Point" });
+      }
+      ctx.fill();
+    }
+
+    ctx.lineWidth = 2.25; ctx.lineJoin = "round"; ctx.lineCap = "round";
+    const cell = performance.now() < coarseUntil ? 9 : 4;
+    for (const f of imp) {
+      const s = implicitSegs(f, cell);
+      ctx.strokeStyle = css(f.color); ctx.beginPath();
+      for (let i = 0; i < s.length; i += 4) { ctx.moveTo(s[i], s[i + 1]); ctx.lineTo(s[i + 2], s[i + 3]); }
+      ctx.stroke();
+    }
+    for (const f of vis) {
+      ctx.strokeStyle = css(f.color); ctx.beginPath();
+      let pen = false, prev = null;
+      for (let px = -1; px <= W + 1; px += 0.5) {
+        const y = f.eval(toWorld(px, 0)[0]);
+        const py = H / 2 - (y - view.cy) * view.scale;
+        if (!isFinite(py)) { pen = false; prev = null; continue; }
+        const cl = Math.max(-1e5, Math.min(1e5, py));
+        if (pen && prev !== null && Math.abs(cl - prev) > H * 1.5 && ((cl < 0 && prev > H) || (cl > H && prev < 0))) pen = false;
+        else if (pen && prev !== null && Math.abs(cl - prev) > 16) {
+          // a true jump (mod, floor, sign) has its midpoint stuck at one side; a steep curve passes through the middle
+          const mpy = H / 2 - (f.eval(toWorld(px - 0.25, 0)[0]) - view.cy) * view.scale;
+          if (!isFinite(mpy) || Math.min(Math.abs(mpy - prev), Math.abs(mpy - cl)) < 0.15 * Math.abs(cl - prev)) pen = false;
+        }
+        pen ? ctx.lineTo(px, cl) : ctx.moveTo(px, cl);
+        pen = true; prev = cl;
+      }
+      ctx.stroke();
+    }
+
+    // markers
+    const markers = [];
+    const n = Math.ceil(W / 2);
+    if (opts.roots) {
+      for (const f of vis) for (const r of zeros(f.eval, x0, x1, n)) markers.push({ x: r, y: 0, kind: "root", color: css(f.color) });
+      for (const g of imp) for (const r of zeros(x => g.F(x, 0), x0, x1, n)) markers.push({ x: r, y: 0, kind: "root", color: css(g.color) });
+    }
+    if (opts.inter) {
+      for (let i = 0; i < vis.length; i++) for (let j = i + 1; j < vis.length; j++) {
+        const a = vis[i], b = vis[j];
+        for (const r of zeros(x => a.eval(x) - b.eval(x), x0, x1, n)) { const y = a.eval(r); if (isFinite(y)) markers.push({ x: r, y, kind: "int" }); }
+      }
+      for (const g of imp) for (const f of vis)
+        for (const r of zeros(x => g.F(x, f.eval(x)), x0, x1, n)) { const y = f.eval(r); if (isFinite(y)) markers.push({ x: r, y, kind: "int" }); }
+    }
+    for (const m of markers) {
+      const [px, py] = toPx(m.x, m.y); m.px = px; m.py = py;
+      if (py < -10 || py > H + 10) continue;
+      ctx.beginPath(); ctx.arc(px, py, m.kind === "root" ? 4.5 : 6, 0, 7);
+      if (m.kind === "root") { ctx.fillStyle = m.color; ctx.strokeStyle = col.paper; ctx.lineWidth = 2; ctx.fill(); ctx.stroke(); }
+      else { ctx.fillStyle = col.paper; ctx.strokeStyle = col.ink; ctx.lineWidth = 1.75; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(px, py, 2.5, 0, 7); ctx.fillStyle = col.ink; ctx.fill(); }
+    }
+    legend.hidden = !(opts.roots || opts.inter);
+    legend.innerHTML = (opts.roots ? `<span><i class="r"></i>Root</span>` : "") + (opts.inter ? `<span><i class="x"></i>Intersection</span>` : "");
+
+    // trace
+    let near = null;
+    if (hover) {
+      const x = toWorld(hover.x, 0)[0];
+      ctx.strokeStyle = col.axis; ctx.globalAlpha = .35; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(hover.x + .5, 0); ctx.lineTo(hover.x + .5, H); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      let html = `<div><span class="k">x =</span> ${fmt(x)}</div>`;
+      for (const f of vis) {
+        const y = f.eval(x), c = css(f.color);
+        if (isFinite(y)) {
+          const py = toPx(x, y)[1];
+          if (py > -10 && py < H + 10) { ctx.fillStyle = col.paper; ctx.strokeStyle = c; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(hover.x, py, 5, 0, 7); ctx.fill(); ctx.stroke(); }
+        }
+        html += `<div><span class="dot" style="background:${c}"></span><span class="k">y =</span> ${fmt(y)}</div>`;
+      }
+      for (const g of imp) {
+        const ys = ysAt(g, x, y0, y1), c = css(g.color);
+        for (const y of ys) { const py = toPx(x, y)[1]; ctx.fillStyle = col.paper; ctx.strokeStyle = c; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(hover.x, py, 5, 0, 7); ctx.fill(); ctx.stroke(); }
+        html += `<div><span class="dot" style="background:${c}"></span><span class="k">y =</span> ${ys.length ? ys.slice(0, 4).sort((p, q) => q - p).map(fmt).join(", ") + (ys.length > 4 ? ", …" : "") : "none in view"}</div>`;
+      }
+      for (const f of mods) {
+        const r = f.mod, xi = Math.round(x), c = css(f.color);
+        if (!r || !r.p) continue;
+        const ys = xi >= 0 && xi < r.p ? (r.byX.get(xi) || []) : null;
+        html += `<div><span class="dot" style="background:${c}"></span><span class="k">x = ${xi}:</span> ${ys === null ? "outside 0…" + (r.p - 1) : ys.length ? "y = " + ys.slice(0, 6).join(", ") + (ys.length > 6 ? ", …" : "") : "no solutions"}</div>`;
+      }
+      readout.innerHTML = all.length ? html : `<div class="k">Add a function to trace it.</div>`;
+      readout.hidden = false;
+      let best = 14;
+      for (const m of markers.concat(cands)) { const d = Math.hypot(m.px - hover.x, m.py - hover.y); if (d < best) { best = d; near = m; } }
+    } else readout.hidden = true;
+
+    if (near) {
+      const label = `${near.label || (near.kind === "root" ? "Root" : "Intersection")}  (${fmt(near.x)}, ${fmt(near.y)})`;
+      ctx.font = `600 12px ${mathFont}`;
+      const tw = ctx.measureText(label).width, bw = tw + 16, bh = 26;
+      let bx = near.px + 10, by = near.py - bh - 10;
+      if (bx + bw > W - 6) bx = near.px - bw - 10;
+      if (by < 6) by = near.py + 10;
+      ctx.fillStyle = col.panel; ctx.strokeStyle = col.rule; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 6) : ctx.rect(bx, by, bw, bh); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = col.ink; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(label, bx + 8, by + bh / 2 + 0.5);
+    }
+  }
+
+  function zoomAt(factor, px = W / 2, py = H / 2) {
+    const [wx, wy] = toWorld(px, py);
+    view.scale = Math.min(1e7, Math.max(1e-4, view.scale * factor));
+    view.cx = wx - (px - W / 2) / view.scale;
+    view.cy = wy + (py - H / 2) / view.scale;
+    interact();
+    draw();
+  }
+
+  /* ---------- pointer ---------- */
+  const pts = new Map();
+  let pinch0 = null;
+  canvas.addEventListener("pointerdown", e => {
+    canvas.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    canvas.classList.add("dragging");
+    hover = { x: e.offsetX, y: e.offsetY };
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); }
+    draw();
+  });
+  canvas.addEventListener("pointermove", e => {
+    const p = pts.get(e.pointerId);
+    if (!p) { if (e.pointerType === "mouse") { hover = { x: e.offsetX, y: e.offsetY }; draw(); } return; }
+    if (pts.size === 1) {
+      view.cx -= (e.offsetX - p.x) / view.scale;
+      view.cy += (e.offsetY - p.y) / view.scale;
+      hover = { x: e.offsetX, y: e.offsetY };
+      interact();
+    }
+    p.x = e.offsetX; p.y = e.offsetY;
+    if (pts.size === 2 && pinch0) {
+      const [a, b] = [...pts.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      zoomAt(d / pinch0, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      pinch0 = d; hover = null;
+    }
+    draw();
+  });
+  const end = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch0 = null; if (!pts.size) canvas.classList.remove("dragging"); };
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+  canvas.addEventListener("pointerleave", e => { if (e.pointerType === "mouse" && !pts.size) { hover = null; draw(); } });
+  canvas.addEventListener("wheel", e => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.offsetX, e.offsetY); }, { passive: false });
+
+  document.getElementById("zin").onclick = () => zoomAt(1.5);
+  document.getElementById("zout").onclick = () => zoomAt(1 / 1.5);
+  document.getElementById("home").onclick = () => { view.cx = 0; view.cy = 0; view.scale = Math.max(20, Math.min(W, H) / 14); draw(); };
+  document.getElementById("add").onclick = () => addRow("", true, true);
+  document.querySelectorAll(".ex").forEach(b => b.addEventListener("click", () => {
+    const blank = fns.find(f => !f.src.trim());
+    if (blank) { const inp = document.getElementById(`fx-${blank.id}`); inp.value = b.textContent; inp.dispatchEvent(new Event("input")); }
+    else addRow(b.textContent);
+  }));
+
+  /* ---------- boot ---------- */
+  const saved = load();
+  if (saved && Array.isArray(saved.fns) && saved.fns.length) {
+    Object.assign(opts, saved.opts || {});
+    for (const [n, p] of Object.entries(saved.params || {})) params.set(n, { v: +p.v, min: +p.min, max: +p.max, playing: false, dir: 1 });
+    if (saved.table) { tStart.value = saved.table[0]; tStep.value = saved.table[1]; }
+    saved.fns.forEach(f => addRow(f.src, f.on !== false));
+  } else {
+    params.set("a", { v: 2, min: -5, max: 5, playing: false, dir: 1 });
+    params.set("b", { v: 1, min: 0, max: 4, playing: false, dir: 1 });
+    ["a sin(bx)", "x^2/4 - 2", "3e^(-x^2/2)"].forEach(s => addRow(s));
+  }
+  bindChip("optRoots", "roots"); bindChip("optInter", "inter"); bindChip("optTable", "table");
+  document.getElementById("tableSec").hidden = !opts.table;
+
+  new ResizeObserver(resize).observe(document.getElementById("stage"));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
