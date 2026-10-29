@@ -8,6 +8,7 @@ Free tools that run entirely in the browser, hosted on GitHub Pages at
 | Tool | Path | What it does |
 | --- | --- | --- |
 | Plotline Grapher | [`/tools/grapher/`](https://bradploeger.github.io/tools/grapher/) | Graphing calculator: functions, implicit equations (e.g. elliptic curves `y^2 = x^3 + ax + b`), modular equations (`... (mod p)`), parameter sliders, roots, intersections, table of values |
+| NEXRAD Volume Viewer | [`/tools/nexrad/`](https://bradploeger.github.io/tools/nexrad/) | 3D viewer for NEXRAD Level II radar volumes: decodes the file in the browser and shows it as points, a ray-marched volume, or reflectivity shells (REF, VEL, SW, ZDR, PHI, RHO). Loads latest or archived scans from NOAA's public AWS bucket, a local file, or the bundled Moore, OK 2013 sample in `tools/nexrad/samples/` |
 
 ## Layout
 
@@ -22,6 +23,7 @@ tools/<name>/index.html   One folder per tool, each a self-contained page
 
 Every tool is a single static HTML file. There is no build step and no server code.
 External libraries load from public CDNs (the grapher uses math.js 11.8.0 from cdnjs).
+The NEXRAD viewer has its scripts (Three.js, the Level II decoder) inlined in its page.
 
 ## Adding a tool
 
